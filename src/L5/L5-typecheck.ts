@@ -105,7 +105,7 @@ export const typeofPrim = (p: PrimOp): Result<TExp> =>
     (p.op === 'newline') ? makeOk(makeProcTExp([] , makeVoidTExp())) :
      // need to implement = just get what thw type should be    //3.1
     (p.op === 'cons') ?
-     makeFailure("HW3 3.1 - Implement this branch") :
+     typeofCons(p) :
     (p.op === 'car') ? 
         typeofCar(p) :
     (p.op === 'cdr') ?

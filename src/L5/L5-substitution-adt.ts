@@ -42,8 +42,7 @@ export const checkNoOccurrence = (tvar: TVar, te: TExp): Result<true> => {
                                             makeOk(true)) :
         isAtomicTExp(e) ? makeOk(true) :
         isProcTExp(e) ? bind(mapResult(check, e.paramTEs), _ => check(e.returnTE)) :
-        isListTExp(e) ?
-            makeFailure("HW3 3.2.a - Implement this branch") :
+        isListTExp(e) ? check(e.itemTE) :
         makeFailure(`Bad type expression ${e} in ${format(te)}`);
     return check(te);
 };
@@ -67,13 +66,14 @@ export const subGet = (sub: Sub, v: TVar): TExp => {
 // unparseTexp(applySub(makeSub(map(parseTE, ["T1", "T2"]), map(parseTE, ["number", "boolean"])),
 //                      parseTE("(T1 * T2 -> T1)")) =>
 // "(number * boolean -> number)"
-// (list T) ==> (list number)  //3.2.b
+// (list T) ==> (list number) 
+// sub is the "evierment"                         //3.2.b
 export const applySub = (sub: Sub, te: TExp): TExp =>
     isEmptySub(sub) ? te :
     isAtomicTExp(te) ? te :
     isTVar(te) ? subGet(sub, te) :
     isProcTExp(te) ? makeProcTExp(map((te) => applySub(sub, te), te.paramTEs), applySub(sub, te.returnTE)) :
-    /* isListTExp(te) ? // HW3 3.2.b - Implement this branch  : */
+    isListTExp(te) ? makeListTExp(applySub(sub,te.itemTE)):
     te;
 
 // ============================================================

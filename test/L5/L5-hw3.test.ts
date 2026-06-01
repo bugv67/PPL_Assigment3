@@ -22,116 +22,175 @@ export const L5typeofProgram = (concreteExp: string): Result<string> =>
 export const L5typeof = (concreteExp: string): Result<string> =>
     bind(p(concreteExp), (e: Exp) => 
             bind(typeofExp(e, makeEmptyTEnv()), unparseTExp));
+
 describe('L5-typecheck', () => {
 
-it('typeofPrim - cons', () => {
-   const tcons = bind(p("cons"), (e: Exp) => isPrimOp(e) ? typeofPrim(e) : makeFailure(`Expected PrimOp: cons`));
+    it('typeofPrim - cons', () => {
+        const tcons = bind(p("cons"), (e: Exp) => isPrimOp(e) ? typeofPrim(e) : makeFailure(`Expected PrimOp: cons`));
 
-   // cons is ProcTExp
-   expect(tcons).toSatisfy(isOkT(isProcTExp));
-   
-   // cons is ProcTExp with 2 parameters
-   expect(bind(tcons, (x) =>
-       isProcTExp(x)
-       ? makeOk(x.paramTEs.length)
-       : makeFailure("not ProcTExp")
-       )).toEqual(makeOk(2));
+        // cons is ProcTExp
+        expect(tcons).toSatisfy(isOkT(isProcTExp));
+        
+        // cons is ProcTExp with 2 parameters
+        expect(bind(tcons, (x) =>
+            isProcTExp(x)
+            ? makeOk(x.paramTEs.length)
+            : makeFailure("not ProcTExp")
+            )).toEqual(makeOk(2));
+    });
+
+    it('typeofPrim - car', () => {
+        const tcar = bind(p("car"), (e: Exp) => isPrimOp(e) ? typeofPrim(e) : makeFailure(`Expected PrimOp : car`));
+
+        // car is ProcTExp
+        expect(tcar).toSatisfy(isOkT(isProcTExp));
+        
+        // car is ProcTExp with 2 parameters
+        expect(bind(tcar, (x) =>
+            isProcTExp(x)
+            ? makeOk(x.paramTEs.length)
+            : makeFailure("not ProcTExp")
+            )).toEqual(makeOk(1));
+
+    });
+
+    it('typeofPrim - cdr', () => {
+        const tcdr = bind(p("cdr"), (e: Exp) => isPrimOp(e) ? typeofPrim(e) : makeFailure(`Expected PrimOp: cdr`));
+
+        // cdr is ProcTExp
+        expect(tcdr).toSatisfy(isOkT(isProcTExp));
+        
+        // cdr is ProcTExp with 2 parameters
+        expect(bind(tcdr, (x) =>
+            isProcTExp(x)
+            ? makeOk(x.paramTEs.length)
+            : makeFailure("not ProcTExp")
+            )).toEqual(makeOk(1));
+
+    });
 });
 
-it('typeofPrim - car', () => {
-   const tcar = bind(p("car"), (e: Exp) => isPrimOp(e) ? typeofPrim(e) : makeFailure(`Expected PrimOp : car`));
+describe('Part 3.1 Edge Cases - Internal structure of Primitives', () => {
+    
+    it('typeofPrim - car uses the EXACT same TVar for param and return type', () => {
+        const tcar = bind(p("car"), (e: Exp) => isPrimOp(e) ? typeofPrim(e) : makeFailure(`Expected PrimOp : car`));
+        
+        expect(bind(tcar, (x) => {
+            if (isProcTExp(x) && x.paramTEs.length === 1) {
+                const listT = x.paramTEs[0];
+                const retT = x.returnTE;
+                // בודקים שזה רשימה של T, ומחזיר T, ושהשם של T זהה בשניהם
+                if (isListTExp(listT) && isTVar(listT.itemTE) && isTVar(retT)) {
+                    return listT.itemTE.var === retT.var ? makeOk(true) : makeFailure("TVars don't match!");
+                }
+            }
+            return makeFailure("Bad structure");
+        })).toEqual(makeOk(true));
+    });
 
-   // car is ProcTExp
-   expect(tcar).toSatisfy(isOkT(isProcTExp));
-   
-   // car is ProcTExp with 2 parameters
-   expect(bind(tcar, (x) =>
-       isProcTExp(x)
-       ? makeOk(x.paramTEs.length)
-       : makeFailure("not ProcTExp")
-       )).toEqual(makeOk(1));
-
-});
-
-it('typeofPrim - cdr', () => {
-   const tcdr = bind(p("cdr"), (e: Exp) => isPrimOp(e) ? typeofPrim(e) : makeFailure(`Expected PrimOp: cdr`));
-
-   // cdr is ProcTExp
-   expect(tcdr).toSatisfy(isOkT(isProcTExp));
-   
-   // cdr is ProcTExp with 2 parameters
-   expect(bind(tcdr, (x) =>
-       isProcTExp(x)
-       ? makeOk(x.paramTEs.length)
-       : makeFailure("not ProcTExp")
-       )).toEqual(makeOk(1));
-
-});
+    it('typeofPrim - cons uses the EXACT same TVar for item, list param, and return list', () => {
+        const tcons = bind(p("cons"), (e: Exp) => isPrimOp(e) ? typeofPrim(e) : makeFailure(`Expected PrimOp : cons`));
+        
+        expect(bind(tcons, (x) => {
+            if (isProcTExp(x) && x.paramTEs.length === 2) {
+                const t1 = x.paramTEs[0];
+                const listT = x.paramTEs[1];
+                const retT = x.returnTE;
+                
+                if (isTVar(t1) && isListTExp(listT) && isTVar(listT.itemTE) && isListTExp(retT) && isTVar(retT.itemTE)) {
+                    // מוודאים שהמשתנה T הוא בדיוק אותו אחד בכל 3 המקומות בחתימה
+                    const isSame = (t1.var === listT.itemTE.var) && (t1.var === retT.itemTE.var);
+                    return isSame ? makeOk(true) : makeFailure("TVars don't match!");
+                }
+            }
+            return makeFailure("Bad structure");
+        })).toEqual(makeOk(true));
+    });
 });
 
 describe('L5-substitution-adt', () => {
 
-it('checkNoOccurrence', () => {
+    it('checkNoOccurrence', () => {
 
-   // type variable occurs in a list of itself
-   expect(checkNoOccurrence(makeTVar("x"), makeListTExp(makeTVar("x"))))
-   .toSatisfy(isFailure);
-   
-   // type variable doesn't occur in a list of another type variable
-   expect(checkNoOccurrence(makeTVar("x"), makeListTExp(makeTVar("y"))))
-   .toEqual(makeOk(true));
-});
+        // type variable occurs in a list of itself
+        expect(checkNoOccurrence(makeTVar("x"), makeListTExp(makeTVar("x"))))
+        .toSatisfy(isFailure);
+        
+        // type variable doesn't occur in a list of another type variable
+        expect(checkNoOccurrence(makeTVar("x"), makeListTExp(makeTVar("y"))))
+        .toEqual(makeOk(true));
+    });
 
-it('applySub - single subtitution', () => {
-   const sub1 = sub(["X"], ["boolean"]);
-   const texp = "(list X)";
-   const te1 = parseTE(texp);
-   const unparsed = bind(sub1, (sub: S.Sub) =>
-                       bind(te1, (te: TExp) =>
-                           unparseTExp(S.applySub(sub, te))));
-   expect(unparsed).toEqual(makeOk("(list boolean)"));
-});
+    it('applySub - single subtitution', () => {
+        const sub1 = sub(["X"], ["boolean"]);
+        const texp = "(list X)";
+        const te1 = parseTE(texp);
+        const unparsed = bind(sub1, (sub: S.Sub) =>
+                            bind(te1, (te: TExp) =>
+                                unparseTExp(S.applySub(sub, te))));
+        expect(unparsed).toEqual(makeOk("(list boolean)"));
+    });
 
 });
 
 describe('L5-typecheck - define', () => {
-it('should correctly type a boolean definition', () => {
-   expect(L5typeof("(define (x : boolean) (if (> 1 2) #t #f))")).toEqual(makeOk("void"));
-});
+    it('should correctly type a boolean definition', () => {
+        expect(L5typeof("(define (x : boolean) (if (> 1 2) #t #f))")).toEqual(makeOk("void"));
+    });
 
-it('should correctly type a number definition', () => {
-   expect(L5typeof("(define (x : number) 5)")).toEqual(makeOk("void"));
-});
+    it('should correctly type a number definition', () => {
+        expect(L5typeof("(define (x : number) 5)")).toEqual(makeOk("void"));
+    });
 });
 
 describe('L5-typecheck - program type', () => {
-it('should correctly type a simple program with number', () => {
-   expect(L5typeofProgram("(L5 (define (x : number) 5) (+ x 1))")).toEqual(makeOk("number"));
+    it('should correctly type a simple program with number', () => {
+        expect(L5typeofProgram("(L5 (define (x : number) 5) (+ x 1))")).toEqual(makeOk("number"));
+    });
+
+    it('should correctly type a simple program with boolean', () => {
+        expect(L5typeofProgram("(L5 (define (x : boolean) #t) x)")).toEqual(makeOk("boolean"));
+    });
 });
 
-it('should correctly type a simple program with boolean', () => {
-   expect(L5typeofProgram("(L5 (define (x : boolean) #t) x)")).toEqual(makeOk("boolean"));
-});
+describe('Part 2 Edge Cases - Define and Program', () => {
+    
+    it('define with wrong type annotation should fail', () => {
+        expect(L5typeof("(define (x : number) #t)")).toSatisfy(isFailure);
+        expect(L5typeof("(define (f : (number -> number)) (lambda ((x : number)) #t))")).toSatisfy(isFailure);
+    });
+
+    it('program with a type error in the middle of the sequence should fail', () => {
+        expect(L5typeofProgram("(L5 (define (x : number) 5) (> x #t) (+ x 1))")).toSatisfy(isFailure);
+    });
+
+    it('program with multiple cascading defines should work', () => {
+        const prog = "(L5 (define (x : number) 5) (define (y : number) (+ x 1)) (+ x y))";
+        expect(L5typeofProgram(prog)).toEqual(makeOk("number"));
+    });
+
+    it('define after regular expressions should work', () => {
+        expect(L5typeofProgram("(L5 (+ 1 2) (define (x : boolean) #t) x)")).toEqual(makeOk("boolean"));
+    });
 });
 
 describe('L5-type-equations - list inference', () => {
-// Drive `inferType` directly. `verifyTeOfExprWithEquations` relies on
-// `equivalentTEs`, which does not recurse into ListTExp, so we structurally
-// check the inferred TExp instead.
-const infer = (src: string): Optional<TExp> => {
-   const parsed = p(src);
-   if (parsed.tag !== "Ok") throw new Error(`parse failed: ${src}`);
-   return inferType(parsed.value);
-};
-it('infers (list number) for cons of number into list literal via lambda app', () => {
-    const t = infer("((lambda ((xs : (list number))) (cons 0 xs)) '(1 2 3))");
-    expect(isSome(t) && isListTExp(t.value) && isNumTExp(t.value.itemTE)).toBe(true);
-});
-it('infers number for car of list number', () => {
-    const t = infer("((lambda ((xs : (list number))) (car xs)) '(1 2 3))");
-    expect(isSome(t) && isNumTExp(t.value)).toBe(true);
-});
-
+    // Drive `inferType` directly. `verifyTeOfExprWithEquations` relies on
+    // `equivalentTEs`, which does not recurse into ListTExp, so we structurally
+    // check the inferred TExp instead.
+    const infer = (src: string): Optional<TExp> => {
+        const parsed = p(src);
+        if (parsed.tag !== "Ok") throw new Error(`parse failed: ${src}`);
+        return inferType(parsed.value);
+    };
+    it('infers (list number) for cons of number into list literal via lambda app', () => {
+        const t = infer("((lambda ((xs : (list number))) (cons 0 xs)) '(1 2 3))");
+        expect(isSome(t) && isListTExp(t.value) && isNumTExp(t.value.itemTE)).toBe(true);
+    });
+    it('infers number for car of list number', () => {
+        const t = infer("((lambda ((xs : (list number))) (car xs)) '(1 2 3))");
+        expect(isSome(t) && isNumTExp(t.value)).toBe(true);
+    });
 });
 
 // ------------------------------------------------------------
