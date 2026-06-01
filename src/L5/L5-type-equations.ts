@@ -78,13 +78,18 @@ export const expToPool = (exp: A.Exp): Pool => {
         A.isAtomicExp(e) ? extendPool(e, pool) :
         A.isProcExp(e) ? extendPool(e, reducePool(findVars, e.body, reducePoolVarDecls(extendPoolVarDecl, e.args, pool))) :
         A.isLitExp(e) && V.isEmptySExp(e.val) ?
-            pool : // HW3 3.3.a - fix this branch
+            extendPool(e, pool) : // HW3 3.3.a - fix this branch
         A.isLitExp(e) && V.isCompoundSExp(e.val) ?
-            pool : // HW3 3.3.a - fix this branch
+            extendPool(exp, nonEmptyListToPool(exp, pool)) : // HW3 3.3.a - fix this branch
         A.isCompoundExp(e) ? extendPool(e, reducePool(findVars, A.expComponents(e), pool)) :
         makeEmptyPool();
     return findVars(exp, makeEmptyPool());
 };
+
+export const nonEmptyListToPool = (exp: A.Exp, pool: Pool): Pool => {
+  const extendFirst = extendPool(exp.val.val1, extendWholeList);
+   return expToPool(exp.val.val2, extendFirst);
+}
 
 // ========================================================
 // Equations ADT

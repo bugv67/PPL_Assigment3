@@ -108,13 +108,29 @@ export const typeofPrim = (p: PrimOp): Result<TExp> =>
                                                                             (p.op === 'display') ? makeOk(makeProcTExp([T()], makeVoidTExp())) :
                                                                                 (p.op === 'newline') ? makeOk(makeProcTExp([], makeVoidTExp())) :
                                                                                     (p.op === 'cons') ?
-                                                                                        makeFailure("HW3 3.1 - Implement this branch") :
+                                                                                        typeOfCons(p) :
                                                                                         (p.op === 'car') ?
-                                                                                            makeFailure("HW3 3.1 - Implement this branch") :
+                                                                                            typeOfCar(p) :
                                                                                             (p.op === 'cdr') ?
-                                                                                                makeFailure("HW3 3.1 - Implement this branch") :
+                                                                                                typeOfCdr(p) :
                                                                                                 makeFailure(`Primitive not yet implemented: ${p.op}`);
 
+
+                                                                                                
+export const typeOfCons = (p: PrimOp): Result<TExp> => {
+    const t = T();
+    return makeOk(makeProcTExp([t, makeListTExp(t)], makeListTExp(t)))
+}
+
+export const typeOfCar = (p: PrimOp): Result<TExp> => {
+    const t = T();
+    return makeOk(makeProcTExp([makeListTExp(t)], t))
+}
+
+export const typeOfCdr = (p: PrimOp): Result<TExp> => {
+    const t = T();
+    return makeOk(makeProcTExp([makeListTExp(t)], makeListTExp(t)))
+}
 // Purpose: compute the type of an if-exp
 // Typing rule:
 //   if type<test>(tenv) = boolean
