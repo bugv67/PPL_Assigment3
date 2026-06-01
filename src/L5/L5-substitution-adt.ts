@@ -33,6 +33,9 @@ export const makeEmptySub = (): Sub => ({tag: "Sub", vars: [], tes: []});
 
 // Purpose: when attempting to bind tvar to te in a sub - check whether tvar occurs in te.
 // Return error if a circular reference is found.
+
+/////// check not t= a*b*t->t but t = a*b*number -> number is ok   // 3.2.a
+// t=number, t=tvar number= texp  => need to check tvar is not in texp
 export const checkNoOccurrence = (tvar: TVar, te: TExp): Result<true> => {
     const check = (e: TExp): Result<true> =>
         isTVar(e) ? ((e.var === tvar.var) ? bind(unparseTExp(te), up => makeFailure(`Occur check error - circular sub ${tvar.var} in ${format(up)}`)) : 
@@ -64,6 +67,7 @@ export const subGet = (sub: Sub, v: TVar): TExp => {
 // unparseTexp(applySub(makeSub(map(parseTE, ["T1", "T2"]), map(parseTE, ["number", "boolean"])),
 //                      parseTE("(T1 * T2 -> T1)")) =>
 // "(number * boolean -> number)"
+// (list T) ==> (list number)  //3.2.b
 export const applySub = (sub: Sub, te: TExp): TExp =>
     isEmptySub(sub) ? te :
     isAtomicTExp(te) ? te :

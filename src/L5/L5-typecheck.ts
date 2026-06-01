@@ -9,7 +9,7 @@ import { applyTEnv, makeEmptyTEnv, makeExtendTEnv, TEnv } from "./TEnv";
 import { isProcTExp, makeBoolTExp, makeNumTExp, makeProcTExp, makeStrTExp, makeVoidTExp,
          parseTE, unparseTExp,
          BoolTExp, NumTExp, StrTExp, TExp, VoidTExp, 
-         makeFreshTVar as T,
+         makeFreshTVar as T, // only make freash is T
          makeListTExp} from "./TExp";
 import { isEmpty, allT, first, rest, NonEmptyList, List, isNonEmptyList } from '../shared/list';
 import { Result, makeFailure, bind, makeOk, zipWithResult } from '../shared/result';
@@ -103,14 +103,31 @@ export const typeofPrim = (p: PrimOp): Result<TExp> =>
     (p.op === 'string=?') ? makeOk(makeProcTExp([makeStrTExp(), makeStrTExp()] , makeBoolTExp())) :
     (p.op === 'display') ? makeOk(makeProcTExp([T()] , makeVoidTExp())) :
     (p.op === 'newline') ? makeOk(makeProcTExp([] , makeVoidTExp())) :
+     // need to implement = just get what thw type should be    //3.1
     (p.op === 'cons') ?
-        makeFailure("HW3 3.1 - Implement this branch") :
-    (p.op === 'car') ?
-        makeFailure("HW3 3.1 - Implement this branch") :
+     makeFailure("HW3 3.1 - Implement this branch") :
+    (p.op === 'car') ? 
+        typeofCar(p) :
     (p.op === 'cdr') ?
-        makeFailure("HW3 3.1 - Implement this branch") :
+        typeofCdr(p) :
     makeFailure(`Primitive not yet implemented: ${p.op}`);
-
+  
+export const typeofCar = (p: PrimOp): Result<TExp> => {  //3.1
+    // car: (listof T:paramtype) -> T:rettype
+    // make fresh type 
+        const paramType =T();
+   return makeOk(makeProcTExp([makeListTExp(paramType)],paramType));
+}
+export const typeofCdr = (p: PrimOp): Result<TExp> => {  //3.1
+    // cdr: (listof T:paramtype) -> (listof T:rettype)
+    const paramType =T();
+    return makeOk( makeProcTExp([makeListTExp(paramType)], makeListTExp(paramType)));
+}
+export const typeofCons = (p: PrimOp): Result<TExp> => {  //3.1
+    // cons: (T:paramtype, listof T:paramtype) -> (listof T:rettype)
+     const paramType =T();
+     return makeOk(makeProcTExp([paramType,makeListTExp(paramType)], makeListTExp(paramType)));
+}
 // Purpose: compute the type of an if-exp
 // Typing rule:
 //   if type<test>(tenv) = boolean
@@ -129,7 +146,7 @@ export const typeofIf = (ifExp: IfExp, tenv: TEnv): Result<TExp> => {
                 bind(constraint2, (_c2: true) =>
                     thenTE));
 };
-
+ 
 // Purpose: compute the type of a proc-exp
 // Typing rule:
 // If   type<body>(extend-tenv(x1=t1,...,xn=tn; tenv)) = t
@@ -218,11 +235,45 @@ export const typeofLetrec = (exp: LetrecExp, tenv: TEnv): Result<TExp> => {
 //   If typeof(exp.val, tenv) = texp
 //   Then typeof(exp) = void
 export const typeofDefine = (exp: DefineExp, tenv: TEnv): Result<VoidTExp> =>
-    makeFailure("HW3 2.1 - Implement this function");
-
+{
+    const decType = exp.var.texp;
+     return bind(typeofExp(exp.val, tenv), (valType: TExp) => 
+    bind(checkEqualType(decType, valType, exp), _ => 
+        makeOk(makeVoidTExp())
+    )
+)};
 // Purpose: compute the type of a program
 // Thread the TEnv through top-level expressions. A define extends the TEnv
 // for the expressions that follow it; the program type is the type of the
 // last expression.
-export const typeofProgram = (exp: Program, tenv: TEnv): Result<TExp> =>
-    makeFailure("HW3 2.2 - Implement this function");
+export const typeofProgram = (exp: Program, tenv: TEnv): Result<TExp> => typeOfSequence(exp.exps, tenv);
+
+
+// recursive helper for typeOfprogram to go through the lines and extend the TEnv for each define;
+export const typeOfSequence = (exps: List<Exp>, tenv: TEnv): Result<TExp> =>{
+    if (!isNonEmptyList<Exp>(exps)) {
+        return makeFailure("Unexpected empty program");
+    }
+    const firstExp = first(exps);
+    const restExps = rest(exps);
+    //recursion base - we are in the last lkine and thats the wanted one
+    if(isEmpty(restExps)){
+        return typeofExp(firstExp, tenv);
+    }
+    
+    if(isDefineExp(firstExp)){
+        // extend
+        const name= firstExp.var.var;
+        const type= firstExp.var.texp;
+        
+        //  משרשרת  funcs of resurls
+        // need to check defineExp is good and the extend env and then continue with the rest of the lines
+       return bind(typeofDefine(firstExp, tenv),
+        _ => {  // tag ok
+        const newEnv = makeExtendTEnv([name], [type], tenv);
+        return typeOfSequence(restExps, newEnv); 
+    }); // in case of failure- no bind just brake the chain and return the failure
+    }
+    return bind(typeofExp(firstExp, tenv),
+     _ => typeOfSequence(restExps, tenv)); // if its not define just continue with the same env
+}
