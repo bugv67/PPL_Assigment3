@@ -73,14 +73,15 @@ const reducePoolVarDecls = (fun: (e: A.VarDecl, pool: Pool) => Pool, vds: A.VarD
 //     [NumExp(1), TVar(15)],
 //     [VarRef(x), TVar(14)],
 //     [PrimOp(+), TVar(13)]])
+//     (list T)                                   // 3.3.a 
 export const expToPool = (exp: A.Exp): Pool => {
     const findVars = (e: A.Exp, pool: Pool): Pool =>
         A.isAtomicExp(e) ? extendPool(e, pool) :
         A.isProcExp(e) ? extendPool(e, reducePool(findVars, e.body, reducePoolVarDecls(extendPoolVarDecl, e.args, pool))) :
         A.isLitExp(e) && V.isEmptySExp(e.val) ?
-            pool : // HW3 3.3.a - fix this branch
-        A.isLitExp(e) && V.isCompoundSExp(e.val) ?
-            pool : // HW3 3.3.a - fix this branch
+            extendPool(e, pool) : // HW3 3.3.a - fix this branch
+        A.isLitExp(e) && V.isCompoundSExp(e.val) ?  //non empty list, (1 2 3)' => (list number)
+            extendPool(e, pool) : // HW3 3.3.a - fix this branch
         A.isCompoundExp(e) ? extendPool(e, reducePool(findVars, A.expComponents(e), pool)) :
         makeEmptyPool();
     return findVars(exp, makeEmptyPool());
