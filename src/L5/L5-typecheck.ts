@@ -218,11 +218,48 @@ export const typeofLetrec = (exp: LetrecExp, tenv: TEnv): Result<TExp> => {
 //   If typeof(exp.val, tenv) = texp
 //   Then typeof(exp) = void
 export const typeofDefine = (exp: DefineExp, tenv: TEnv): Result<VoidTExp> =>
+{
+    const decType = exp.var.texp;
+     return bind(typeofExp(exp.val, tenv), (valType: TExp) => 
+    bind(checkEqualType(decType, valType, exp), _ => 
+        makeOk(makeVoidTExp())
+    )
+)};
+    
     makeFailure("HW3 2.1 - Implement this function");
 
 // Purpose: compute the type of a program
 // Thread the TEnv through top-level expressions. A define extends the TEnv
 // for the expressions that follow it; the program type is the type of the
 // last expression.
-export const typeofProgram = (exp: Program, tenv: TEnv): Result<TExp> =>
-    makeFailure("HW3 2.2 - Implement this function");
+export const typeofProgram = (exp: Program, tenv: TEnv): Result<TExp> => typeOfSequence(exp.exps, tenv);
+
+
+// recursive helper for typeOfprogram to go through the lines and extend the TEnv for each define;
+export const typeOfSequence = (exps: List<Exp>, tenv: TEnv): Result<TExp> =>{
+    if (!isNonEmptyList<Exp>(exps)) {
+        return makeFailure("Unexpected empty program");
+    }
+    const firstExp = first(exps);
+    const restExps = rest(exps);
+    //recursion base - we are in the last lkine and thats the wanted one
+    if(isEmpty(restExps)){
+        return typeofExp(firstExp, tenv);
+    }
+    
+    if(isDefineExp(firstExp)){
+        // extend
+        const name= firstExp.var.var;
+        const type= firstExp.var.texp;
+        
+        //  משרשרת  funcs of resurls
+        // need to check defineExp is good and the extend env and then continue with the rest of the lines
+       return bind(typeofDefine(firstExp, tenv),
+        _ => {  // tag ok
+        const newEnv = makeExtendTEnv([name], [type], tenv);
+        return typeOfSequence(restExps, newEnv); 
+    }); // in case of failure- no bind just brake the chain and return the failure
+    }
+    return bind(typeofExp(firstExp, tenv),
+     _ => typeOfSequence(restExps, tenv)); // if its not define just continue with the same env
+}
