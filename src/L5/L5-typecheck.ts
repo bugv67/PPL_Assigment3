@@ -9,7 +9,7 @@ import { applyTEnv, makeEmptyTEnv, makeExtendTEnv, TEnv } from "./TEnv";
 import { isProcTExp, makeBoolTExp, makeNumTExp, makeProcTExp, makeStrTExp, makeVoidTExp,
          parseTE, unparseTExp,
          BoolTExp, NumTExp, StrTExp, TExp, VoidTExp, 
-         makeFreshTVar as T,
+         makeFreshTVar as T, // only make freash is T
          makeListTExp} from "./TExp";
 import { isEmpty, allT, first, rest, NonEmptyList, List, isNonEmptyList } from '../shared/list';
 import { Result, makeFailure, bind, makeOk, zipWithResult } from '../shared/result';
@@ -103,14 +103,31 @@ export const typeofPrim = (p: PrimOp): Result<TExp> =>
     (p.op === 'string=?') ? makeOk(makeProcTExp([makeStrTExp(), makeStrTExp()] , makeBoolTExp())) :
     (p.op === 'display') ? makeOk(makeProcTExp([T()] , makeVoidTExp())) :
     (p.op === 'newline') ? makeOk(makeProcTExp([] , makeVoidTExp())) :
+     // need to implement = just get what thw type should be    //3.1
     (p.op === 'cons') ?
-        makeFailure("HW3 3.1 - Implement this branch") :
-    (p.op === 'car') ?
-        makeFailure("HW3 3.1 - Implement this branch") :
+     makeFailure("HW3 3.1 - Implement this branch") :
+    (p.op === 'car') ? 
+        typeofCar(p) :
     (p.op === 'cdr') ?
-        makeFailure("HW3 3.1 - Implement this branch") :
+        typeofCdr(p) :
     makeFailure(`Primitive not yet implemented: ${p.op}`);
-
+  
+export const typeofCar = (p: PrimOp): Result<TExp> => {  //3.1
+    // car: (listof T:paramtype) -> T:rettype
+    // make fresh type 
+        const paramType =T();
+   return makeOk(makeProcTExp([makeListTExp(paramType)],paramType));
+}
+export const typeofCdr = (p: PrimOp): Result<TExp> => {  //3.1
+    // cdr: (listof T:paramtype) -> (listof T:rettype)
+    const paramType =T();
+    return makeOk( makeProcTExp([makeListTExp(paramType)], makeListTExp(paramType)));
+}
+export const typeofCons = (p: PrimOp): Result<TExp> => {  //3.1
+    // cons: (T:paramtype, listof T:paramtype) -> (listof T:rettype)
+     const paramType =T();
+     return makeOk(makeProcTExp([paramType,makeListTExp(paramType)], makeListTExp(paramType)));
+}
 // Purpose: compute the type of an if-exp
 // Typing rule:
 //   if type<test>(tenv) = boolean
@@ -129,7 +146,7 @@ export const typeofIf = (ifExp: IfExp, tenv: TEnv): Result<TExp> => {
                 bind(constraint2, (_c2: true) =>
                     thenTE));
 };
-
+ 
 // Purpose: compute the type of a proc-exp
 // Typing rule:
 // If   type<body>(extend-tenv(x1=t1,...,xn=tn; tenv)) = t
@@ -225,9 +242,6 @@ export const typeofDefine = (exp: DefineExp, tenv: TEnv): Result<VoidTExp> =>
         makeOk(makeVoidTExp())
     )
 )};
-    
-    makeFailure("HW3 2.1 - Implement this function");
-
 // Purpose: compute the type of a program
 // Thread the TEnv through top-level expressions. A define extends the TEnv
 // for the expressions that follow it; the program type is the type of the
