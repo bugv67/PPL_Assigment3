@@ -246,7 +246,8 @@ const solve = (equations: Equation[], sub: S.Sub): Res.Result<S.Sub> => {
 const canUnify = (eq: Equation): boolean =>
     T.isProcTExp(eq.left) && T.isProcTExp(eq.right) ?
         (eq.left.paramTEs.length === eq.right.paramTEs.length) :
-    // HW3 3.3.c - add missing branch
+         T.isListTExp(eq.left) && T.isListTExp(eq.right) ? true :
+         //canUnify(makeEquation(eq.left.itemTE, eq.right.itemTE) ):
     false;
 
 // Signature: splitEquation(equation)
@@ -264,5 +265,6 @@ const splitEquation = (eq: Equation): Equation[] =>
         R.zipWith(makeEquation,
                   cons(eq.left.returnTE, eq.left.paramTEs),
                   cons(eq.right.returnTE, eq.right.paramTEs)) :
-    // HW3 3.3.d - add missing branch
+    T.isListTExp(eq.left) && T.isListTExp(eq.right) ?
+    [makeEquation(eq.left.itemTE, eq.right.itemTE)]:
     [];
