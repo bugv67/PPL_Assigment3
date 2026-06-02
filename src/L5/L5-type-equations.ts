@@ -73,7 +73,7 @@ const reducePoolVarDecls = (fun: (e: A.VarDecl, pool: Pool) => Pool, vds: A.VarD
 //     [NumExp(1), TVar(15)],
 //     [VarRef(x), TVar(14)],
 //     [PrimOp(+), TVar(13)]])
-//     (list T)                                   // 3.3.a 
+//     (list T)  each node on ast gets a type                                  // 3.3.a 
 export const expToPool = (exp: A.Exp): Pool => {
     const findVars = (e: A.Exp, pool: Pool): Pool =>
         A.isAtomicExp(e) ? extendPool(e, pool) :
@@ -139,10 +139,11 @@ export const makeEquationsFromExp = (exp: A.Exp, pool: Pool): Opt.Optional<Equat
                             Opt.mapv(Opt.bind(safeLast(exp.body), (last: A.CExp) => inPool(pool, last)), (ret: T.TExp) =>
                                 [makeEquation(left, T.makeProcTExp(R.map((vd) => vd. texp, exp.args), ret))])) :
     A.isLitExp(exp) ?
-        (V.isEmptySExp(exp.val) ?
-            Opt.makeNone() : // HW3 3.3.b - fix this branch
-        V.isCompoundSExp(exp.val) ?
-            Opt.makeNone() : // HW3 3.3.b - fix this branch
+        (V.isEmptySExp(exp.val) ?Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
+           [makeEquation(left,T.makeListTExp(T.makeFreshTVar()))]) :      // 3.3.b 
+        V.isCompoundSExp(exp.val) ?Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
+            //////////// is there a way to fint the type of the list before using?
+           [makeEquation(left,T.makeListTExp(T.makeFreshTVar()))]) : // (list sexp.type)    3.3.b 
         isNumber(exp.val) ? Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
             [ makeEquation(left, T.makeNumTExp()) ]) :
         isBoolean(exp.val) ? Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
