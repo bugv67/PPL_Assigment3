@@ -220,4 +220,58 @@ describe('L5-typecheck - Program final return type', () => {
         expect(L5typeofProgram("(L5 (define (x : number) 5) (+ x 1))"))
             .toEqual(makeOk("number"));
     });
+    describe('Part 3 Edge Cases - List Inference and Unification', () => {
+    
+    const infer = (src: string): Optional<TExp> => {
+        const parsed = p(src);
+        if (parsed.tag !== "Ok") throw new Error(`parse failed: ${src}`);
+        return inferType(parsed.value);
+    };
+
+    it('infers fresh TVar for an empty list literal', () => {
+        // רשימה ריקה צריכה לקבל טיפוס של (list T) כאשר T הוא משתנה חדש
+        const t = infer("'()");
+        expect(isSome(t) && isListTExp(t.value) && isTVar(t.value.itemTE)).toBe(true);
+    });
+
+    it('infers correctly for nested lists (list of lists)', () => {
+        // שליפת איבר מתוך רשימה של רשימות (car (car xs))
+        const t = infer("((lambda ((xs : (list (list number)))) (car (car xs))) '((1 2)))");
+        expect(isSome(t) && isNumTExp(t.value)).toBe(true);
+    });
+
+    it('infers (list number) for cdr of list of numbers', () => {
+        // cdr של רשימת מספרים צריך להישאר רשימת מספרים
+        const t = infer("((lambda ((xs : (list number))) (cdr xs)) '(1 2 3))");
+        expect(isSome(t) && isListTExp(t.value) && isNumTExp(t.value.itemTE)).toBe(true);
+    });
+
+    it('fails to infer when consing a boolean into a list of numbers', () => {
+        // מקרה קלאסי של Unification Failure: ניסיון להכניס בוליאני לרשימת מספרים
+        const t = infer("((lambda ((xs : (list number))) (cons #t xs)) '(1 2 3))");
+        expect(isNone(t)).toBe(true);
+    });
+
+    it('infers correctly when unifying two empty lists in an if-expression', () => {
+        // (if #t '() '()) צריך להחזיר טיפוס של רשימה עם נעלם
+        const t = infer("(if #t '() '())");
+        expect(isSome(t) && isListTExp(t.value) && isTVar(t.value.itemTE)).toBe(true);
+    });
+});
+
+describe('L5-substitution-adt - Nested List Edge Cases', () => {
+    
+    it('checkNoOccurrence fails on deeply nested list of itself', () => {
+        // מוודא שהבדיקה המעגלית (Occurrence Check) תופסת נעלם גם אם הוא קבור עמוק ברשימה בתוך רשימה
+        // T occurs in (list (list T))
+        const nestedList = makeListTExp(makeListTExp(makeTVar("x")));
+        expect(checkNoOccurrence(makeTVar("x"), nestedList)).toSatisfy(isFailure);
+    });
+
+    it('checkNoOccurrence succeeds on deeply nested list of different TVar', () => {
+        // מוודא שאם הנעלמים שונים, אין שגיאה גם ברשימה מקוננת
+        const nestedList = makeListTExp(makeListTExp(makeTVar("y")));
+        expect(checkNoOccurrence(makeTVar("x"), nestedList)).toEqual(makeOk(true));
+    });
+});
 });

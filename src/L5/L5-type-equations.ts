@@ -266,5 +266,6 @@ const splitEquation = (eq: Equation): Equation[] =>
                   cons(eq.left.returnTE, eq.left.paramTEs),
                   cons(eq.right.returnTE, eq.right.paramTEs)) :
     T.isListTExp(eq.left) && T.isListTExp(eq.right) ?
+    // here creates the eq t=number ornumber=bool and deleter
     [makeEquation(eq.left.itemTE, eq.right.itemTE)]:
     [];
