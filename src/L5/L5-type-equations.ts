@@ -79,9 +79,9 @@ export const expToPool = (exp: A.Exp): Pool => {
         A.isAtomicExp(e) ? extendPool(e, pool) :
         A.isProcExp(e) ? extendPool(e, reducePool(findVars, e.body, reducePoolVarDecls(extendPoolVarDecl, e.args, pool))) :
         A.isLitExp(e) && V.isEmptySExp(e.val) ?
-            extendPool(e, pool) : // HW3 3.3.a - fix this branch
+            extendPool(e, pool) :                                     // 3.3.a 
         A.isLitExp(e) && V.isCompoundSExp(e.val) ?  //non empty list, (1 2 3)' => (list number)
-            extendPool(e, pool) : // HW3 3.3.a - fix this branch
+            extendPool(e, pool) :                                     // 3.3.a
         A.isCompoundExp(e) ? extendPool(e, reducePool(findVars, A.expComponents(e), pool)) :
         makeEmptyPool();
     return findVars(exp, makeEmptyPool());
@@ -126,10 +126,10 @@ export const makeEquationsFromExp = (exp: A.Exp, pool: Pool): Opt.Optional<Equat
     // An application must respect the type of its operator
     // Type(Operator) = [T1 * .. * Tn -> Te]
     // Type(Application) = Te
-    A.isAppExp(exp) ? Opt.bind(inPool(pool, exp.rator), (rator: T.TExp) =>
-                        Opt.bind(Opt.mapOptional((e) => inPool(pool, e), exp.rands), (rands: T.TExp[]) =>
-                            Opt.mapv(inPool(pool, exp), (e: T.TExp) => 
-                                [makeEquation(rator, T.makeProcTExp(rands, e))]))) :
+    A.isAppExp(exp) ? Opt.bind(inPool(pool, exp.rator), (rator: T.TExp) =>         // get the type of the operator
+                        Opt.bind(Opt.mapOptional((e) => inPool(pool, e), exp.rands), (rands: T.TExp[]) =>  // check rands in pool and get their types
+                            Opt.mapv(inPool(pool, exp), (e: T.TExp) =>    
+                                [makeEquation(rator, T.makeProcTExp(rands, e))]))) : // if sucssesful male equ
     // The type of procedure is (T1 * ... * Tn -> Te)
     // where Te is the type of the last exp in the body of the proc.
     // and   Ti is the type of each of the parameters.
@@ -141,9 +141,10 @@ export const makeEquationsFromExp = (exp: A.Exp, pool: Pool): Opt.Optional<Equat
     A.isLitExp(exp) ?
         (V.isEmptySExp(exp.val) ?Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
            [makeEquation(left,T.makeListTExp(T.makeFreshTVar()))]) :      // 3.3.b 
-        V.isCompoundSExp(exp.val) ?Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
-            //////////// is there a way to fint the type of the list before using?
-           [makeEquation(left,T.makeListTExp(T.makeFreshTVar()))]) : // (list sexp.type)    3.3.b 
+        V.isCompoundSExp(exp.val) ?Opt.mapv(inPool(pool, exp) ,
+            //////////// is there a way to find the type of the list before using??
+
+           (left: T.TExp) => [ makeEquation(left,T.makeListTExp(T.makeFreshTVar())) ]) :   //left is the whole type,  T0= (list T (not sexp.type))    3.3.b 
         isNumber(exp.val) ? Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
             [ makeEquation(left, T.makeNumTExp()) ]) :
         isBoolean(exp.val) ? Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
@@ -162,7 +163,7 @@ export const makeEquationsFromExp = (exp: A.Exp, pool: Pool): Opt.Optional<Equat
     A.isPrimOp(exp) ? Opt.bind(inPool(pool, exp), (left: T.TExp) =>
                             Opt.mapv(Res.resultToOptional(TC.typeofPrim(exp)), (right: T.TExp) =>
                                 [makeEquation(left, right)])) :
-    // Todo: define, let, letrec, set 
+    // Todo: define, let, letrec, set  ???????????????????????????????????????????????????????????????????????????????????
     Opt.makeNone();
 
 
@@ -247,7 +248,7 @@ const canUnify = (eq: Equation): boolean =>
     T.isProcTExp(eq.left) && T.isProcTExp(eq.right) ?
         (eq.left.paramTEs.length === eq.right.paramTEs.length) :
          T.isListTExp(eq.left) && T.isListTExp(eq.right) ? true :
-         //canUnify(makeEquation(eq.left.itemTE, eq.right.itemTE) ):
+         //canUnify(makeEquation(eq.left.itemTE, eq.right.itemTE) ): // in split
     false;
 
 // Signature: splitEquation(equation)
@@ -266,6 +267,6 @@ const splitEquation = (eq: Equation): Equation[] =>
                   cons(eq.left.returnTE, eq.left.paramTEs),
                   cons(eq.right.returnTE, eq.right.paramTEs)) :
     T.isListTExp(eq.left) && T.isListTExp(eq.right) ?
-    // here creates the eq t=number ornumber=bool and deleter
-    [makeEquation(eq.left.itemTE, eq.right.itemTE)]:
+    // here creates the eq t=number ornumber=bool and deleter in solve
+    [makeEquation(eq.left.itemTE, eq.right.itemTE)]:    
     [];
