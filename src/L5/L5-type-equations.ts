@@ -11,6 +11,7 @@ import { isEmpty, first, rest, cons, isNonEmptyList } from "../shared/list";
 import { parse as p } from "../shared/parser";
 import { format } from "../shared/format";
 import { isBoolean, isNumber, isString } from "../shared/type-predicates";
+import { makeBoolTExp, makeFreshTVar, makeListTExp, makeNumTExp, makeStrTExp } from "./TExp";
 
 // ============================================================n
 // Pool ADT
@@ -74,22 +75,54 @@ const reducePoolVarDecls = (fun: (e: A.VarDecl, pool: Pool) => Pool, vds: A.VarD
 //     [VarRef(x), TVar(14)],
 //     [PrimOp(+), TVar(13)]])
 export const expToPool = (exp: A.Exp): Pool => {
+    const sExpToPool = (sexp: V.SExpValue, pool: Pool): Pool => {
+        // Create a wrapper LitExp so it matches the framework's A.Exp requirement
+        const wrappedLit = A.makeLitExp(sexp);
+
+        if (V.isEmptySExp(sexp)) {
+            // For '(), we want its type to be (list T). 
+            // We manually cons it into the pool with the accurate type.
+            const freshVar = makeFreshTVar();
+            return cons({ e: wrappedLit, te: makeListTExp(freshVar) }, pool);
+        }
+        
+        if (V.isCompoundSExp(sexp)) {
+            const freshVar = makeFreshTVar();
+            // 1. Manually insert the current pair wrapped LitExp as a (list T)
+            const currentPool = cons({ e: wrappedLit, te: makeListTExp(freshVar) }, pool);
+            
+            // 2. Recursively process head and tail
+            const headPool = sExpToPool(sexp.val1, currentPool);
+            const tailPool = sExpToPool(sexp.val2, headPool);
+            
+            return tailPool;
+        }
+
+        if (typeof sexp === "number") {
+            return cons({ e: wrappedLit, te: makeNumTExp() }, pool);
+        }
+
+        if (typeof sexp === "boolean") {
+            return cons({ e: wrappedLit, te: makeBoolTExp() }, pool);
+        }
+
+        if (typeof sexp === "string") {
+            return cons({ e: wrappedLit, te: makeStrTExp() }, pool);
+        }
+
+        return pool;
+    };
     const findVars = (e: A.Exp, pool: Pool): Pool =>
         A.isAtomicExp(e) ? extendPool(e, pool) :
         A.isProcExp(e) ? extendPool(e, reducePool(findVars, e.body, reducePoolVarDecls(extendPoolVarDecl, e.args, pool))) :
         A.isLitExp(e) && V.isEmptySExp(e.val) ?
-            extendPool(e, pool) : // HW3 3.3.a - fix this branch
+           extendPool(e, sExpToPool(e.val, pool)): // HW3 3.3.a - fix this branch
         A.isLitExp(e) && V.isCompoundSExp(e.val) ?
-            extendPool(exp, nonEmptyListToPool(exp, pool)) : // HW3 3.3.a - fix this branch
+            extendPool(e, sExpToPool(e.val, pool)) : // HW3 3.3.a - fix this branch
         A.isCompoundExp(e) ? extendPool(e, reducePool(findVars, A.expComponents(e), pool)) :
         makeEmptyPool();
     return findVars(exp, makeEmptyPool());
 };
-
-export const nonEmptyListToPool = (exp: A.Exp, pool: Pool): Pool => {
-  const extendFirst = extendPool(exp.val.val1, extendWholeList);
-   return expToPool(exp.val.val2, extendFirst);
-}
 
 // ========================================================
 // Equations ADT
@@ -142,11 +175,35 @@ export const makeEquationsFromExp = (exp: A.Exp, pool: Pool): Opt.Optional<Equat
     A.isProcExp(exp) ? Opt.bind(inPool(pool, exp), (left: T.TExp) =>
                             Opt.mapv(Opt.bind(safeLast(exp.body), (last: A.CExp) => inPool(pool, last)), (ret: T.TExp) =>
                                 [makeEquation(left, T.makeProcTExp(R.map((vd) => vd. texp, exp.args), ret))])) :
-    A.isLitExp(exp) ?
+    A.isLitExp(exp) ? // HW3 3.3.b - fix this branch
         (V.isEmptySExp(exp.val) ?
-            Opt.makeNone() : // HW3 3.3.b - fix this branch
-        V.isCompoundSExp(exp.val) ?
-            Opt.makeNone() : // HW3 3.3.b - fix this branch
+           Opt.mapv(inPool(pool, exp), (left: T.TExp) => [ makeEquation(left, T.makeListTExp(T.makeFreshTVar())) ]
+        ) : 
+        V.isCompoundSExp(exp.val) ? // HW3 3.3.b - fix this branch
+           (() => {
+        // 1. מבצעים Type Casting מפורש כדי ש-TS ידע ב-100% שיש פה val1 ו-val2
+        const compoundVal = exp.val as V.CompoundSExp;
+        const headSExp = compoundVal.val1;
+        const tailSExp = compoundVal.val2;
+
+        // 2. ממשיכים עם השרשרת של המונאדה כרגיל
+        return Opt.bind(inPool(pool, exp), (currentType: T.TExp) =>
+            Opt.bind(inPool(pool, A.makeLitExp(headSExp)), (headType: T.TExp) =>
+                Opt.mapv(inPool(pool, A.makeLitExp(tailSExp)), (tailType: T.TExp) => {
+                    
+                    const expectedListType = T.makeListTExp(headType);
+
+                    // Eq 1: Type(current_exp) === (list Type(head))
+                    const eq1 = makeEquation(currentType, expectedListType);
+                    
+                    // Eq 2: Type(tail) === (list Type(head))
+                    const eq2 = makeEquation(tailType, expectedListType);
+
+                    return [eq1, eq2];
+                })
+            )
+        );
+    })() : 
         isNumber(exp.val) ? Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
             [ makeEquation(left, T.makeNumTExp()) ]) :
         isBoolean(exp.val) ? Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
@@ -250,6 +307,9 @@ const canUnify = (eq: Equation): boolean =>
     T.isProcTExp(eq.left) && T.isProcTExp(eq.right) ?
         (eq.left.paramTEs.length === eq.right.paramTEs.length) :
     // HW3 3.3.c - add missing branch
+   T.isListTExp(eq.left) && T.isListTExp(eq.right) ?
+        true : 
+        
     false;
 
 // Signature: splitEquation(equation)
@@ -268,4 +328,6 @@ const splitEquation = (eq: Equation): Equation[] =>
                   cons(eq.left.returnTE, eq.left.paramTEs),
                   cons(eq.right.returnTE, eq.right.paramTEs)) :
     // HW3 3.3.d - add missing branch
+    (T.isListTExp(eq.left) && T.isListTExp(eq.right)) ?
+        [ makeEquation(eq.left.itemTE, eq.right.itemTE) ] :
     [];
