@@ -72,6 +72,10 @@ export const applySub = (sub: Sub, te: TExp): TExp =>
     isEmptySub(sub) ? te :
     isAtomicTExp(te) ? te :
     isTVar(te) ? subGet(sub, te) :
+    //(() => {    // if te is a tvar - we need to check if the sub has a mapping for it, if it does we need to apply the sub to the result of the mapping as well, because the mapping can also be a tvar that has a mapping in the sub, and so on until we reach a te that is not a tvar or a tvar that is not in the sub, in which case we return the te itself. this is important for cases like t=t1, t1=t2, t2=number, where we need to apply the sub to t to get number, and not just return t1 or t2. 3.2.b
+    //       const res = subGet(sub, te);
+    //       return eqTVar(res, te) ? te : applySub(sub, res);
+    //    })() :
     isProcTExp(te) ? makeProcTExp(map((te) => applySub(sub, te), te.paramTEs), applySub(sub, te.returnTE)) :
     isListTExp(te) ? makeListTExp(applySub(sub,te.itemTE)):
     te;
