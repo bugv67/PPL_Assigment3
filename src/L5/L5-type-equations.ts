@@ -12,6 +12,10 @@ import { parse as p } from "../shared/parser";
 import { format } from "../shared/format";
 import { isBoolean, isNumber, isString } from "../shared/type-predicates";
 
+// exp to pool: T0: '(1 2 3 T#)
+// T1: 1
+// T2: '(2 3 T#)
+
 // ============================================================n
 // Pool ADT
 // A pool represents a map from Exp to TExp
@@ -51,7 +55,11 @@ export const inPool = (pool: Pool, e: A.Exp): Opt.Optional<T.TExp> => {
 // matching sub-expressions into a pool.
 // fun should construct a new pool given a new expression from exp-list
 // that has not yet been seen before.
-const reducePool = (fun: (e: A.Exp, pool: Pool) => Pool, exps: A.Exp[], result: Pool): Pool =>
+const reducePool = (
+    fun: (e: A.Exp, pool: Pool) => Pool, // what to do with a new exp
+     exps: A.Exp[],                      // the list of exps to process
+      result: Pool):                    // the pool accumulated so far
+       Pool =>
     isNonEmptyList<A.Exp>(exps) ?
         Opt.maybe(inPool(result, first(exps)),
                   _ => reducePool(fun, rest(exps), result),
@@ -79,9 +87,12 @@ export const expToPool = (exp: A.Exp): Pool => {
         A.isAtomicExp(e) ? extendPool(e, pool) :
         A.isProcExp(e) ? extendPool(e, reducePool(findVars, e.body, reducePoolVarDecls(extendPoolVarDecl, e.args, pool))) :
         A.isLitExp(e) && V.isEmptySExp(e.val) ?
-            extendPool(e, pool) :                                     // 3.3.a 
+            extendPool(e, pool) :
+            A.isLitExp(e) && (isNumber(e.val) || isBoolean(e.val) || isString(e.val)) ? extendPool(e, pool) :                                     // 3.3.a 
         A.isLitExp(e) && V.isCompoundSExp(e.val) ?  //non empty list, (1 2 3)' => (list number)
-            extendPool(e, pool) :                                     // 3.3.a
+            extendPool(e,    // now we add both the head and the tail
+                            // its an sexpValye but we force it to be extp to add it to the pool and then we can use it to create the eqn for the list type,
+                 reducePool(findVars, [A.makeLitExp(e.val.val1), A.makeLitExp(e.val.val2)], pool)) :                                     // 3.3.a
         A.isCompoundExp(e) ? extendPool(e, reducePool(findVars, A.expComponents(e), pool)) :
         makeEmptyPool();
     return findVars(exp, makeEmptyPool());
@@ -139,12 +150,19 @@ export const makeEquationsFromExp = (exp: A.Exp, pool: Pool): Opt.Optional<Equat
                             Opt.mapv(Opt.bind(safeLast(exp.body), (last: A.CExp) => inPool(pool, last)), (ret: T.TExp) =>
                                 [makeEquation(left, T.makeProcTExp(R.map((vd) => vd. texp, exp.args), ret))])) :
     A.isLitExp(exp) ?
-        (V.isEmptySExp(exp.val) ?Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
+        (V.isEmptySExp(exp.val) ?
+        //if empty exp
+        Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
            [makeEquation(left,T.makeListTExp(T.makeFreshTVar()))]) :      // 3.3.b 
-        V.isCompoundSExp(exp.val) ?Opt.mapv(inPool(pool, exp) ,
-            //////////// is there a way to find the type of the list before using??
-
-           (left: T.TExp) => [ makeEquation(left,T.makeListTExp(T.makeFreshTVar())) ]) :   //left is the whole type,  T0= (list T (not sexp.type))    3.3.b 
+     V.isCompoundSExp(exp.val) ? 
+            Opt.bind(inPool(pool, exp), (tWhole: T.TExp) => 
+                Opt.bind(inPool(pool, A.makeLitExp((exp.val as V.CompoundSExp).val1)), (tHead: T.TExp) => 
+                    Opt.mapv(inPool(pool, A.makeLitExp((exp.val as V.CompoundSExp).val2)), (tTail: T.TExp) => [
+                        makeEquation(tWhole, T.makeListTExp(tHead)),
+                        makeEquation(tTail, T.makeListTExp(tHead))
+                    ])
+                )
+            ) :  //left is the whole type,  T0= (list T (not sexp.type))    3.3.b 
         isNumber(exp.val) ? Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
             [ makeEquation(left, T.makeNumTExp()) ]) :
         isBoolean(exp.val) ? Opt.mapv(inPool(pool, exp) , (left: T.TExp) =>
@@ -163,7 +181,7 @@ export const makeEquationsFromExp = (exp: A.Exp, pool: Pool): Opt.Optional<Equat
     A.isPrimOp(exp) ? Opt.bind(inPool(pool, exp), (left: T.TExp) =>
                             Opt.mapv(Res.resultToOptional(TC.typeofPrim(exp)), (right: T.TExp) =>
                                 [makeEquation(left, right)])) :
-    // Todo: define, let, letrec, set  ???????????????????????????????????????????????????????????????????????????????????
+    // Todo: define, let, letrec, set  
     Opt.makeNone();
 
 
