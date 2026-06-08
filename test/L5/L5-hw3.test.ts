@@ -284,3 +284,21 @@ describe('L5-type-equations - Higher Order Lists', () => {
         // תלוי איך את בודקת את הטיפוסים הפנימיים
     });
 });
+describe('L5-substitution-adt - The 3 Final Bosses', () => {
+    
+    // בודק ש-applySub יודע לרוץ רקורסיבית בתוך פרמטרים של פונקציות (נכשל קודם על Syntax error)
+    it('applySub - substitutes inside procedure parameter and return lists simultaneously', () => {
+        const sub1 = sub(["X", "Y"], ["boolean", "number"]);
+        // שימי לב שתיקנתי פה לסוגריים עגולים במקום מרובעים
+        const te1 = parseTE("((list X) -> (list Y))");
+        
+        const unparsed = bind(sub1, (sub: S.Sub) =>
+            bind(te1, (te: TExp) =>
+                unparseTExp(S.applySub(sub, te))
+            )
+        );
+        expect(unparsed).toEqual(makeOk("((list boolean) -> (list number))"));
+    });
+
+});
+
